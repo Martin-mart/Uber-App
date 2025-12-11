@@ -1,0 +1,29 @@
+.container {
+    padding: 0 2rem;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: blue;
+}
+
+
+.map {
+    background-color: red;
+    flex: 1;
+}
+
+.start {
+    background-color: green;
+    flex: 1;
+}
+
+.main{
+    min-height: 100vh;
+    padding: 4rem 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
