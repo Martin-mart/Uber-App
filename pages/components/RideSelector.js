@@ -2,35 +2,64 @@ import React, { useState, useEffect } from 'react';
 import tw from 'tailwind-styled-components';
 import { carList } from '../data/carList';
 
+const MAPBOX_TOKEN =
+  'pk.eyJ1IjoiY3Jpc3R0b2xsb3IiLCJhIjoiY2t2bmdsNnE2MGN1czJwbzQ3eGZtbWw0ciJ9.Df7y8nU6Tm8KXoXo5q3ZIg';
+
 const RideSelector = ({ pickupCoordinates, dropoffCoordinates }) => {
   const [rideDuration, setRideDuration] = useState(0);
 
   useEffect(() => {
-    if (!pickupCoordinates || !dropoffCoordinates) return;
+    // 🛑 Prevent invalid API calls
+    if (
+      !pickupCoordinates ||
+      !dropoffCoordinates ||
+      pickupCoordinates[0] === 0 ||
+      dropoffCoordinates[0] === 0
+    ) {
+      return;
+    }
 
     fetch(
-      `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupCoordinates[0]},${pickupCoordinates[1]};${dropoffCoordinates[0]},${dropoffCoordinates[1]}?access_token=YOUR_MAPBOX_TOKEN`
+      `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupCoordinates[0]},${pickupCoordinates[1]};${dropoffCoordinates[0]},${dropoffCoordinates[1]}?access_token=${MAPBOX_TOKEN}`
     )
       .then((response) => response.json())
       .then((data) => {
         if (data.routes && data.routes[0]) {
           setRideDuration(data.routes[0].duration / 100);
         }
+      })
+      .catch((error) => {
+        console.error('Mapbox directions error:', error);
       });
   }, [pickupCoordinates, dropoffCoordinates]);
 
   return (
     <Wrapper>
-      <Title>Choose a ride, or swipe for more options</Title>
+      <TitleContainer>
+        <Title>Choose a ride, or swipe for more options</Title>
+        <Subtitle>Prices may vary depending on demand</Subtitle>
+      </TitleContainer>
+      
       <CarList>
         {carList.map((car, index) => (
           <Car key={index}>
-            <CarImage src={car.imgUrl} />
+            <CarImageContainer>
+              <CarImage src={car.imgUrl} alt={car.service} />
+            </CarImageContainer>
+            
             <CarDetails>
               <ServiceSection>{car.service}</ServiceSection>
-              <Time>5 min away</Time>
+              <Capacity>{car.capacity || "4 passengers"}</Capacity>
+              <TimeSection>
+                <ClockIcon>🕒</ClockIcon>
+                <TimeText>5 min away</TimeText>
+              </TimeSection>
             </CarDetails>
-            <Price>{'ksh ' + (rideDuration * car.multiplier).toFixed(2)}</Price>
+            
+            <PriceSection>
+              <Price>Ksh {(rideDuration * car.multiplier).toFixed(0)}</Price>
+              <PriceNote>approx. price</PriceNote>
+            </PriceSection>
           </Car>
         ))}
       </CarList>
@@ -40,13 +69,73 @@ const RideSelector = ({ pickupCoordinates, dropoffCoordinates }) => {
 
 export default RideSelector;
 
-/* Styled Components */
-const Wrapper = tw.div`flex-1 flex flex-col overflow-y-scroll`;
-const Title = tw.div`text-gray-500 text-center text-sm py-2 border-b`;
-const CarList = tw.div`flex flex-col sm:flex-row sm:overflow-x-scroll`;
-const Car = tw.div`flex sm:flex-col sm:min-w-[150px] p-4 items-center border-b sm:border-b-0 sm:border-r`;
-const CarImage = tw.img`h-14 w-14 object-contain mb-2 sm:mb-0 sm:mr-0 sm:mb-2`;
-const CarDetails = tw.div`flex-1 text-center sm:text-left`;
-const ServiceSection = tw.div`font-medium`;
-const Time = tw.div`text-xs text-blue-500`;
-const Price = tw.div`text-sm font-semibold mt-2`;
+/* Styled Components - Updated to match Uber style */
+const Wrapper = tw.div`
+  flex-1 flex flex-col bg-white
+`;
+
+const TitleContainer = tw.div`
+  px-4 py-3 border-b border-gray-100
+`;
+
+const Title = tw.div`
+  text-gray-800 font-medium text-center text-base
+`;
+
+const Subtitle = tw.div`
+  text-gray-500 text-center text-xs mt-1
+`;
+
+const CarList = tw.div`
+  flex-1 overflow-y-auto
+`;
+
+const Car = tw.div`
+  flex items-center px-4 py-3 border-b border-gray-100
+  hover:bg-gray-50 transition-colors duration-150
+  cursor-pointer
+`;
+
+const CarImageContainer = tw.div`
+  mr-4
+`;
+
+const CarImage = tw.img`
+  h-16 w-16 object-contain
+`;
+
+const CarDetails = tw.div`
+  flex-1
+`;
+
+const ServiceSection = tw.div`
+  font-medium text-gray-800 text-base
+`;
+
+const Capacity = tw.div`
+  text-gray-500 text-xs mt-1
+`;
+
+const TimeSection = tw.div`
+  flex items-center mt-2
+`;
+
+const ClockIcon = tw.span`
+  text-xs mr-1
+`;
+
+const TimeText = tw.div`
+  text-blue-500 text-xs font-medium
+`;
+
+const PriceSection = tw.div`
+  text-right ml-4
+`;
+
+const Price = tw.div`
+  font-bold text-gray-800 text-lg
+`;
+
+const PriceNote = tw.div`
+  text-gray-500 text-xs mt-1
+`;

@@ -1,56 +1,57 @@
-import React, { use } from 'react'
-import { useEffect } from 'react'
-import mapboxgl from '!mapbox-gl'
-import tw from 'tailwind-styled-components'
-import Map  from './components/Map'
+import React, { useEffect, useRef } from 'react';
+import tw from 'tailwind-styled-components';
 
-mapboxgl.accessToken = 'pk.eyJ1IjoiY3Jpc3R0b2xsb3IiLCJhIjoiY2t2bmdsNnE2MGN1czJwbzQ3eGZtbWw0ciJ9.Df7y8nU6Tm8KXoXo5q3ZIg';
+const Map = ({ pickupCoordinates, dropoffCoordinates }) => {
+  const mapContainer = useRef(null);
+  const mapInstance = useRef(null);
 
-const map = (props) => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return; // Ensure client-side
 
-    useEffect(() => {
-            const map = new mapboxgl.Map({
-                container: "map", // container ID
-                style: 'mapbox://styles/drakosi/ckvcwq3rw4314o3i2ho8tph',
-                center: [-1.3129621994752918, 36.827350878476445], // starting position [lng, lat]
-                zoom: 3, // starting zoom
-            })
-            if(props.pickupCoordinates){
-                addToMap(map, props.pickupCoordinates)
-            }
+    const initMap = async () => {
+      const mapboxgl = (await import('mapbox-gl')).default;
+      mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
-            if(props.dropoffCoordinates){
-                addToMap(map, props.dropoffCoordinates)
-            }
+      if (!mapContainer.current) return;
 
-            //auto zoom and centering
+      // Initialize map only once
+      if (!mapInstance.current) {
+        mapInstance.current = new mapboxgl.Map({
+          container: mapContainer.current,
+          style: 'mapbox://styles/mapbox/streets-v11',
+          center: pickupCoordinates || [0, 0],
+          zoom: 12,
+        });
+      }
 
-            if(props.pickupCoordinates && props.dropoffCoordinates){
-                map.fitBounds(
-                    [props.pickupCoordinates, props.dropoffCoordinates],
-                    {
-                        padding: 60
-                    }
-                )
-            }
+      const map = mapInstance.current;
 
-        }, [props.pickupCoordinates, props.dropoffCoordinates])
+      // Clear previous markers
+      map.markers?.forEach((m) => m.remove());
+      map.markers = [];
 
-        const addToMap = (map, coordinates) => {
-          const marker1 = new mapboxgl.Marker()
-            .setLngLat(coordinates)
-            .addTo(map);
-        }
+      const addMarker = (coords) => {
+        const marker = new mapboxgl.Marker().setLngLat(coords).addTo(map);
+        map.markers.push(marker);
+      };
 
+      if (pickupCoordinates) addMarker(pickupCoordinates);
+      if (dropoffCoordinates) addMarker(dropoffCoordinates);
 
+      // Fit bounds if both points exist
+      if (pickupCoordinates && dropoffCoordinates) {
+        map.fitBounds([pickupCoordinates, dropoffCoordinates], { padding: 60 });
+      }
+    };
 
-  return (
-    <wrapper id='map'></wrapper>
-  )
-}
+    initMap();
+  }, [pickupCoordinates, dropoffCoordinates]);
 
-export default map
+  return <MapWrapper ref={mapContainer} />;
+};
 
-const wrapper = tw.div`
-flex-1  h-1/2
-`
+export default Map;
+
+const MapWrapper = tw.div`
+  flex-1 h-64 sm:h-96 w-full
+`;

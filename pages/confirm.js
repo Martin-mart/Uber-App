@@ -1,65 +1,89 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import tw from 'tailwind-styled-components';
-import mapboxgl from 'mapbox-gl';
 import { useRouter } from 'next/router';
 import RideSelector from './components/RideSelector';
-
-mapboxgl.accessToken =
-  'pk.eyJ1IjoiY3Jpc3R0b2xsb3IiLCJhIjoiY2t2bmdsNnE2MGN1czJwbzQ3eGZtbWw0ciJ9.Df7y8nU6Tm8KXoXo5q3ZIg';
 
 const Confirm = () => {
   const router = useRouter();
   const { pickup, dropoff } = router.query;
 
-  const [pickupCoordinates, setPickupCoordinates] = useState([0, 0]);
-  const [dropoffCoordinates, setDropoffCoordinates] = useState([0, 0]);
+  const [pickupCoordinates, setPickupCoordinates] = useState(null);
+  const [dropoffCoordinates, setDropoffCoordinates] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const mapContainer = useRef(null);
+  const mapInstance = useRef(null);
 
-  // Fetch coordinates from Mapbox API
-  const getCoordinates = (location, setter) => {
+  // Fetch coordinates
+  const getCoordinates = async (location, setter) => {
     if (!location) return;
-    fetch(
+    const res = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${location}.json?` +
         new URLSearchParams({
-          access_token:
-            'pk.eyJ1IjoiY3Jpc3R0b2xsb3IiLCJhIjoiY2t2bmdsNnE2MGN1czJwbzQ3eGZtbWw0ciJ9.Df7y8nU6Tm8KXoXo5q3ZIg',
+          access_token: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
           limit: 1,
         })
-    )
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.features && data.features[0]) {
-          setter(data.features[0].center);
-        }
-      });
+    );
+    const data = await res.json();
+    if (data.features && data.features[0]) setter(data.features[0].center);
   };
 
+  // Get pickup & dropoff coordinates
   useEffect(() => {
-    getCoordinates(pickup, setPickupCoordinates);
-    getCoordinates(dropoff, setDropoffCoordinates);
+    if (!pickup || !dropoff) return;
+
+    Promise.all([
+      getCoordinates(pickup, setPickupCoordinates),
+      getCoordinates(dropoff, setDropoffCoordinates),
+    ]).then(() => setLoading(false));
   }, [pickup, dropoff]);
 
-  // Initialize Mapbox map
+  // Initialize Map
   useEffect(() => {
-    if (!pickupCoordinates || !dropoffCoordinates) return;
-    const map = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v11',
-      center: pickupCoordinates,
-      zoom: 12,
+    if (!pickupCoordinates || !dropoffCoordinates || typeof window === 'undefined') return;
+
+    import('mapbox-gl').then((mapboxgl) => {
+      mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+      // Remove previous map if exists
+      if (mapInstance.current) mapInstance.current.remove();
+
+      const map = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v11',
+        center: pickupCoordinates,
+        zoom: 12,
+      });
+
+      new mapboxgl.Marker({ color: 'green' }).setLngLat(pickupCoordinates).addTo(map);
+      new mapboxgl.Marker({ color: 'red' }).setLngLat(dropoffCoordinates).addTo(map);
+
+      map.fitBounds([pickupCoordinates, dropoffCoordinates], { padding: 60 });
+
+      mapInstance.current = map;
     });
-
-    // Add markers
-    new mapboxgl.Marker().setLngLat(pickupCoordinates).addTo(map);
-    new mapboxgl.Marker().setLngLat(dropoffCoordinates).addTo(map);
-
-    // Resize map on window resize
-    window.addEventListener('resize', () => map.resize());
-
-    return () => map.remove();
   }, [pickupCoordinates, dropoffCoordinates]);
+
+  const confirmRide = () => {
+    router.push({
+      pathname: '/ride',
+      query: {
+        pickupLng: pickupCoordinates[0],
+        pickupLat: pickupCoordinates[1],
+        dropoffLng: dropoffCoordinates[0],
+        dropoffLat: dropoffCoordinates[1],
+      },
+    });
+  };
+
+  if (loading)
+    return (
+      <LoadingWrapper>
+        <Spinner />
+        <p>Calculating route...</p>
+      </LoadingWrapper>
+    );
 
   return (
     <Wrapper>
@@ -75,12 +99,9 @@ const Confirm = () => {
 
       {/* Ride Options */}
       <RideContainer>
-        <RideSelector
-          pickupCoordinates={pickupCoordinates}
-          dropoffCoordinates={dropoffCoordinates}
-        />
+        <RideSelector pickupCoordinates={pickupCoordinates} dropoffCoordinates={dropoffCoordinates} />
         <ConfirmButtonContainer>
-          <ConfirmButton>Confirm Uber</ConfirmButton>
+          <ConfirmButton onClick={confirmRide}>Confirm Uber</ConfirmButton>
         </ConfirmButtonContainer>
       </RideContainer>
     </Wrapper>
@@ -89,11 +110,13 @@ const Confirm = () => {
 
 export default Confirm;
 
-/* Styled Components */
-const Wrapper = tw.div`flex-1 h-screen bg-blue-50 flex flex-col overflow-y-scroll`;
+/* ---------------- STYLES ---------------- */
+const Wrapper = tw.div`h-screen flex flex-col bg-blue-50`;
 const MapContainer = tw.div`w-full h-64 sm:h-96 md:h-[500px]`;
 const RideContainer = tw.div`flex-1 flex flex-col`;
-const ConfirmButtonContainer = tw.div`border-t-2 border-gray-200 flex-none`;
-const ConfirmButton = tw.div`bg-black text-white text-center py-4 m-4 text-lg sm:text-xl cursor-pointer rounded-lg`;
-const ButtonContainer = tw.div`bg-white px-4 rounded-full absolute top-4 left-4 z-10 shadow-md cursor-pointer`;
-const BackButton = tw.img`h-8 sm:h-10 w-8 sm:w-10 object-contain cursor-pointer`;
+const ConfirmButtonContainer = tw.div`border-t border-gray-200`;
+const ConfirmButton = tw.button`bg-black text-white text-center py-4 m-4 text-lg rounded-lg active:scale-95 transition`;
+const ButtonContainer = tw.div`bg-white px-4 rounded-full absolute top-4 left-4 z-10 shadow-md`;
+const BackButton = tw.img`h-8 w-8 cursor-pointer`;
+const LoadingWrapper = tw.div`h-screen flex flex-col items-center justify-center`;
+const Spinner = tw.div`h-10 w-10 border-4 border-gray-300 border-t-black rounded-full animate-spin mb-4`;
