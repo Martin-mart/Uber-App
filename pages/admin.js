@@ -8,10 +8,9 @@ import { useRouter } from 'next/router';
 const Admin = () => {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [rides, setRides] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Protect route: only admins
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
@@ -19,35 +18,34 @@ const Admin = () => {
         return;
       }
 
-      const tokenResult = await currentUser.getIdTokenResult();
-      if (!tokenResult.claims.admin) {
-        router.push('/'); // non-admin users redirected
+      // Fetch user role
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (!userDoc.exists() || userDoc.data().role !== 'admin') {
+        router.push('/');
         return;
       }
 
       setUser(currentUser);
-      fetchRides();
+      fetchDrivers();
     });
 
     return () => unsubscribe();
   }, []);
 
-  const fetchRides = async () => {
+  const fetchDrivers = async () => {
     setLoading(true);
-    const ridesRef = collection(db, 'rides');
-    const ridesSnapshot = await getDocs(ridesRef);
-    const ridesData = ridesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    setRides(ridesData);
+    const usersRef = collection(db, 'users');
+    const snapshot = await getDocs(usersRef);
+    const driverData = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((u) => u.role === 'driver');
+    setDrivers(driverData);
     setLoading(false);
   };
 
-  const handleStatusChange = async (rideId, status) => {
-    const rideRef = doc(db, 'rides', rideId);
-    await updateDoc(rideRef, { status });
-    fetchRides(); // refresh
+  const approveDriver = async (driverId) => {
+    await updateDoc(doc(db, 'users', driverId), { approved: true });
+    fetchDrivers();
   };
 
   const handleLogout = async () => {
@@ -55,71 +53,60 @@ const Admin = () => {
     router.push('/login');
   };
 
-  if (loading) return <LoadingText>Loading rides...</LoadingText>;
+  if (loading) return <LoadingText>Loading drivers...</LoadingText>;
 
   return (
     <Wrapper>
       <Header>
         <Title>Admin Dashboard</Title>
-        <LogoutButton onClick={handleLogout}>Log out</LogoutButton>
+        <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
       </Header>
 
-      <RideTable>
-        <TableHeader>
-          <TableRow>
-            <TableCell>User</TableCell>
-            <TableCell>Pickup</TableCell>
-            <TableCell>Dropoff</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell>Action</TableCell>
-          </TableRow>
-        </TableHeader>
-
-        <TableBody>
-          {rides.map((ride) => (
-            <TableRow key={ride.id}>
-              <TableCell>{ride.userName || 'N/A'}</TableCell>
-              <TableCell>{ride.pickup}</TableCell>
-              <TableCell>{ride.dropoff}</TableCell>
-              <TableCell>{ride.status || 'Pending'}</TableCell>
-              <TableCell>
-                <StatusButton
-                  onClick={() => handleStatusChange(ride.id, 'Completed')}
-                >
-                  Mark Completed
-                </StatusButton>
-                <StatusButton
-                  bg="bg-yellow-500"
-                  onClick={() => handleStatusChange(ride.id, 'Cancelled')}
-                >
-                  Cancel
-                </StatusButton>
-              </TableCell>
-            </TableRow>
+      <DriverTable>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Full Name</th>
+            <th>Plate</th>
+            <th>Vehicle</th>
+            <th>Seats</th>
+            <th>Approved</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {drivers.map((driver) => (
+            <tr key={driver.id}>
+              <td>{driver.displayName}</td>
+              <td>{driver.driverInfo?.fullName || '-'}</td>
+              <td>{driver.driverInfo?.plateNumber || '-'}</td>
+              <td>{driver.driverInfo?.vehicleType || '-'}</td>
+              <td>{driver.driverInfo?.seats || '-'}</td>
+              <td>{driver.approved ? 'Yes' : 'No'}</td>
+              <td>
+                {!driver.approved && (
+                  <ActionButton onClick={() => approveDriver(driver.id)}>
+                    Approve
+                  </ActionButton>
+                )}
+              </td>
+            </tr>
           ))}
-        </TableBody>
-      </RideTable>
+        </tbody>
+      </DriverTable>
     </Wrapper>
   );
 };
 
 export default Admin;
 
-/* ---------------- STYLES ---------------- */
-const Wrapper = tw.div`min-h-screen p-6 bg-gray-100 flex flex-col`;
+/* ---------- STYLES ---------- */
+const Wrapper = tw.div`min-h-screen p-6 bg-gray-100`;
 const Header = tw.div`flex justify-between items-center mb-6`;
 const Title = tw.h1`text-2xl font-bold`;
 const LogoutButton = tw.button`bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600`;
 
-const RideTable = tw.table`min-w-full bg-white rounded-lg shadow overflow-hidden`;
-const TableHeader = tw.thead`bg-gray-200`;
-const TableBody = tw.tbody``;
-const TableRow = tw.tr`border-b hover:bg-gray-50`;
-const TableCell = tw.td`py-3 px-4 text-left`;
+const DriverTable = tw.table`min-w-full bg-white rounded-lg shadow overflow-hidden`;
+const ActionButton = tw.button`bg-green-500 text-white py-1 px-3 rounded hover:bg-green-600`;
 
-const StatusButton = tw.button`
-bg-green-500 text-white py-1 px-3 rounded hover:bg-green-600 mr-2
-${(props) => props.bg || ''}
-`;
-
-const LoadingText = tw.p`text-center text-gray-500 text-lg mt-8`;
+const LoadingText = tw.p`text-center text-gray-500 mt-8 text-lg`;

@@ -1,12 +1,10 @@
-import { GoogleAuthProvider, getAuth } from "firebase/auth";
+// firebase.js
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getAnalytics } from "firebase/analytics";
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBpfQ-hssZIJMKZRBNnhG9oh4dqBxxY358",
   authDomain: "uber-next-e0970.firebaseapp.com",
@@ -18,18 +16,20 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-// 1️⃣ Initialize Firebase app first
 const app = initializeApp(firebaseConfig);
 
-// 2️⃣ Initialize Analytics only in the browser
+// Analytics (browser-only)
 let analytics;
 if (typeof window !== "undefined") {
   analytics = getAnalytics(app);
 }
 
-// 3️⃣ Firebase Auth
-const provider = new GoogleAuthProvider();
+// Auth
 const auth = getAuth(app);
-const db = getFirestore(app); // <-- this was missing
+const provider = new GoogleAuthProvider();
 
-export { app, analytics, provider, auth, db };
+// Firestore
+const db = getFirestore(app);
+
+// Export everything
+export { app, analytics, auth, provider, db };

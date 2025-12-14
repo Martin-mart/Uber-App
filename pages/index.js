@@ -2,8 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import tw from 'tailwind-styled-components';
 import mapboxgl from 'mapbox-gl';
 import Link from 'next/link';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/router';
 
 mapboxgl.accessToken =
@@ -11,22 +12,32 @@ mapboxgl.accessToken =
 
 export default function Home() {
   const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const router = useRouter();
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
 
-  /* ---------------- AUTH ---------------- */
+  /* ---------------- AUTH & ROLE ---------------- */
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
         router.push('/login');
-      } else {
-        setUser({
-          name: currentUser.displayName,
-          photoUrl: currentUser.photoURL,
-        });
+        return;
       }
+
+      // Get role from Firestore
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userSnap = await getDoc(userRef);
+      const role = userSnap.exists() ? userSnap.data().role || 'user' : 'user';
+
+      setUser({
+        uid: currentUser.uid,
+        name: currentUser.displayName,
+        photoUrl: currentUser.photoURL,
+      });
+      setUserRole(role);
       setLoading(false);
     });
 
@@ -73,9 +84,29 @@ export default function Home() {
                   user?.photoUrl ||
                   'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y'
                 }
-                onClick={() => signOut(auth)}
                 alt="Profile"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
               />
+              {dropdownOpen && (
+                <DropdownContent>
+                  {userRole === 'admin' && (
+                    <DashboardButton onClick={() => router.push('/admin')}>
+                      Admin Dashboard
+                    </DashboardButton>
+                  )}
+                  {userRole === 'driver' && (
+                    <DashboardButton onClick={() => router.push('/driver-dashboard')}>
+                      Driver Dashboard
+                    </DashboardButton>
+                  )}
+                  {userRole === 'user' && (
+                    <DashboardButton onClick={() => router.push('/user-dashboard')}>
+                      My Dashboard
+                    </DashboardButton>
+                  )}
+                  <LogoutButton onClick={() => signOut(auth)}>Logout</LogoutButton>
+                </DropdownContent>
+              )}
             </Profile>
           </Header>
 
@@ -127,9 +158,13 @@ const ActionItems = tw.div`h-full flex flex-col p-6`;
 
 const Header = tw.div`flex justify-between items-center mb-8`;
 const UberLogo = tw.img`h-7 w-auto`;
-const Profile = tw.div`flex items-center space-x-3 bg-gray-50 rounded-full pl-3 pr-1 py-1`;
+const Profile = tw.div`relative flex items-center space-x-3 bg-gray-50 rounded-full pl-3 pr-1 py-1 cursor-pointer`;
 const Name = tw.div`text-sm font-medium text-gray-800 truncate max-w-[100px]`;
 const UserImage = tw.img`h-9 w-9 rounded-full border-2 border-white cursor-pointer hover:opacity-90 transition-opacity`;
+
+const DropdownContent = tw.div`absolute top-12 right-0 w-48 bg-white border rounded-lg shadow-md flex flex-col z-50`;
+const DashboardButton = tw.button`px-4 py-2 text-gray-800 hover:bg-gray-100 text-left`;
+const LogoutButton = tw.button`px-4 py-2 text-red-600 hover:bg-red-100 text-left`;
 
 const ActionButtons = tw.div`flex justify-between mb-6 flex-1`;
 const ActionButton = tw.div`flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 lg:w-28 lg:h-28 bg-gray-50 rounded-2xl shadow-sm hover:shadow-md transform hover:scale-105 transition-all duration-200 cursor-pointer active:scale-95`;
